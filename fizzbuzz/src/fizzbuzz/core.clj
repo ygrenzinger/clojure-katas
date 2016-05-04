@@ -4,7 +4,7 @@
   (integer? (/ value n)))
 
 (defn manage-divisible-by [value]
-  (apply str (map #(if (divisible-by value (nth % 0)) (nth % 1) "") {3 "Fizz", 5 "Buzz", 7 "Wazz"})))
+  (apply str (map #(if (divisible-by value (key %)) (val %) "") {3 "Fizz", 5 "Buzz", 7 "Wazz"})))
 
 (defn manage-contains [value]
   (apply str (map #(cond
