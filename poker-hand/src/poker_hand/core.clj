@@ -69,15 +69,16 @@
 (defn sort-by-rank-decreasing [cards]
   (reverse (sort-by #(rank-values (:rank %)) cards)))
 
-(defn find-multiple-rank [counted-rank multiple]
-  (filter #(= multiple (val %)) counted-rank))
+(defn find-multiple-rank [count-by-rank multiple]
+  (filter #(= multiple (val %)) count-by-rank))
 
 (defn multiple-of-a-kind? [cards multiple]
   (let [counted-rank (memoized-count-rank cards)
         multiple-of-a-kind (find-multiple-rank counted-rank multiple)]
     (if-not (empty? multiple-of-a-kind)
       (let [[[rank _]] multiple-of-a-kind]
-        {:rank rank, :remaining-cards (filter #(not= rank (:rank %)) cards)}))))
+        {:rank rank, :remaining-cards (filter #(not= rank (:rank %)) cards)})
+      nil)))
 
 (defn one-pair? [cards]
   (multiple-of-a-kind? cards 2))
@@ -93,31 +94,42 @@
         pairs (find-multiple-rank counted-rank 2)]
     (if (= 2 (count pairs))
       (let [rank (vec (reverse (sort-by #(rank-values %) (map #(first %) pairs))))]
-        {:rank rank, :remaining-cards (filter #(not (some #{(:rank %)} rank)) cards)}))))
+        {:rank rank, :remaining-cards (filter #(not (some #{(:rank %)} rank)) cards)})
+      nil)))
 
 (defn full? [cards]
   (let [pair (one-pair? cards)
         three-of-a-kind (three-of-a-kind? cards)]
-    (if (and three-of-a-kind pair) [(:rank three-of-a-kind) (:rank pair)])))
+    (if (and three-of-a-kind pair)
+      [(:rank three-of-a-kind) (:rank pair)]
+      nil)))
 
 (defn flush? [cards]
-  (if (apply = (map #(:suit %) cards)) (first (sort-by-rank-decreasing cards))))
+  (if (apply = (map #(:suit %) cards))
+    (first (sort-by-rank-decreasing cards))
+    nil))
 
 (defn straight? [cards]
   (let [sorted-cards (sort-by-rank-decreasing cards)
         highest-card (first sorted-cards)
         highest-value (rank-values (:rank highest-card))]
     (if (= (take 5 (iterate dec highest-value)) (map #(rank-values (:rank %)) sorted-cards))
-      highest-card)))
+      highest-card
+      nil)))
 
 (defn straight-flush? [cards]
   (let [flush-card (flush? cards)
         straight-card (straight? cards)]
     (if (= flush-card straight-card)
-      flush-card)))
+      flush-card
+      nil)))
 
-(defn winning-with-full-hand-figure? [f figure hands]
-  (let [having-special-hand (filter #(second %) (map (fn [[k v]] [k (f v)]) hands))]
+(defn filter-special-hand [hands special-categorie?]
+  (let [keep-only-found-special-categorie #(not (nil? (second %)))]
+    (filter keep-only-found-special-categorie (map (fn [[player hand]] [player (special-categorie? hand)]) hands))))
+
+(defn winning-with-full-hand-figure? [special-categorie? figure hands]
+  (let [having-special-hand (filter-special-hand hands special-categorie?)]
     (cond
       (> (count having-special-hand) 1) (let [grouped-by-rank (group-by #(rank-values (:rank (second %))) having-special-hand)
                                               highest-ranks (apply max-key key grouped-by-rank)]
@@ -134,8 +146,8 @@
 (defn straight-flush-winner? [hands]
   (winning-with-full-hand-figure? straight-flush? "straight flush" hands))
 
-(defn multiple-of-a-kind-winner? [f figure hands]
-  (let [having-special-hand (filter #(second %) (map (fn [[k v]] [k (f v)]) hands))]
+(defn multiple-of-a-kind-winner? [special-categorie? figure hands]
+  (let [having-special-hand (filter-special-hand hands special-categorie?)]
     (cond
       (= 1 (count having-special-hand)) (let [[[player result]] having-special-hand] (str player " wins with a " figure " of " (:rank result)))
       (> (count having-special-hand) 1) (let [grouped-by-rank (group-by #(rank-values (:rank (second %))) having-special-hand)
@@ -162,7 +174,7 @@
   (multiple-of-a-kind-winner? one-pair? "pair" hands))
 
 (defn full-winner? [hands]
-  (let [having-special-hand (filter #(second %) (map (fn [[k v]] [k (full? v)]) hands))]
+  (let [having-special-hand (filter-special-hand hands full?)]
     (cond
       (= (count having-special-hand) 1) (str (first (first having-special-hand)) " wins with a full at " (first (second (first having-special-hand))) " and " (second (second (first having-special-hand))))
       (> (count having-special-hand) 1) (let [grouped-by-three-of (group-by #(rank-values (first (second %))) having-special-hand)
@@ -183,7 +195,7 @@
       :else nil)))
 
 (defn double-pair-winner? [hands]
-  (let [having-special-hand (filter #(second %) (map (fn [[k v]] [k (double-pair? v)]) hands))]
+  (let [having-special-hand (filter-special-hand hands double-pair?)]
     (cond
       (= (count having-special-hand) 1) (let [[[winner {[pair1 pair2] :rank}]] having-special-hand]
                                           (str winner " wins with double pair of " pair1 " and " pair2))
@@ -212,35 +224,42 @@
       :else nil)))
 
 (defn winner? [hands]
-  (let [winning-cases [straight-flush-winner?
-                       four-of-a-kind-winner?
-                       full-winner?
-                       flush-winner?
-                       straight-winner?
-                       three-of-a-kind-winner?
-                       double-pair-winner?
-                       pair-winner?
-                       highest-player-card-winner?]
+  (let [poker-hands-categories-in-winning-order [straight-flush-winner?
+                                                 four-of-a-kind-winner?
+                                                 full-winner?
+                                                 flush-winner?
+                                                 straight-winner?
+                                                 three-of-a-kind-winner?
+                                                 double-pair-winner?
+                                                 pair-winner?
+                                                 highest-player-card-winner?]
         parsed-hands (parse-hands hands)]
-    (first (drop-while #(nil? %) (map (fn [win?] (win? parsed-hands)) winning-cases)))))
+    (first (drop-while #(nil? %) (map (fn [win?] (win? parsed-hands)) poker-hands-categories-in-winning-order)))))
 
-; (get-random-hand-for-players [player1 player2 player3])
-(defn get-random-hand-for-players [players]
-  (let [random-cards (shuffle (for [suit-char (keys suit-char)
-                                    rank-char (keys rank-char)]
-                                (str rank-char suit-char)))]
-    (loop [pool-of-cards random-cards
-           remaining-players players
-           game {}]
-      (if (empty? remaining-players)
-        game
-        (recur (drop 5 pool-of-cards)
-               (rest remaining-players)
-               (into game {(first remaining-players), (apply str (interpose " " (take 5 pool-of-cards)))})
-               )))))
+(defn build-all-possible-card-input []
+  (for [suit-char (keys suit-char)
+        rank-char (keys rank-char)]
+    (str rank-char suit-char)))
+
+(defn get-hand-for-players
+  "build game with a hand for each given player"
+  ([players] (get-hand-for-players players true))
+  ([players random]
+   (let [possible-cards-input (build-all-possible-card-input)
+         cards (if random (shuffle possible-cards-input) possible-cards-input)]
+     (loop [pool-of-cards cards
+            remaining-players players
+            game {}]
+       (let [cards-hand (apply str (interpose " " (take 5 pool-of-cards)))
+             hand {(first remaining-players), cards-hand}]
+         (if (empty? remaining-players)
+           game
+           (recur (drop 5 pool-of-cards)
+                  (rest remaining-players)
+                  (into game hand))))))))
 
 (defn play-random-game [players]
-  (let [hands (get-random-hand-for-players players)]
+  (let [hands (get-hand-for-players players)]
     {:hands hands, :winner (winner? hands)}))
 
 (defn print-game [game]
@@ -251,4 +270,4 @@
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (doall (map print-game (repeatedly 20 #(play-random-game ["Sylvain" "Bruno" "Yannick" "Diego"])))))
+  (doall (map print-game (repeatedly 20 #(play-random-game ["Sylvain" "Bruno" "Yannick" "Diego" "Somkiane"])))))
