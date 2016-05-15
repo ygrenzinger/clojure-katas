@@ -6,9 +6,19 @@
 
 (def width (r/atom 10))
 (def height (r/atom 10))
+(def percentageTrigger (r/atom 50))
+
+(defn get-random-state []
+  (let [randomPercentage (rand-int 101)]
+    (if (>= randomPercentage @percentageTrigger)
+      0
+      1)))
+
+(defn generate-row []
+  (vec (repeatedly @width #(get-random-state))))
 
 (defn generate-grid []
-  (vec (take @height (repeat (vec (take @width (repeat 0)))))))
+  (vec (repeatedly @height #(generate-row))))
 
 (def grid (r/atom (generate-grid)))
 
@@ -34,15 +44,11 @@
   (= 1 (get-cell-state row-idx col-idx)))
 
 (defn next-cell-state [row-idx col-idx]
-  (let [alive (alive-cell? row-idx col-idx)
+  (let [alive? (alive-cell? row-idx col-idx)
         alive-neighbours (count-alive-neighbours row-idx col-idx)]
-    (if alive
-      (if (and (> alive-neighbours 1) (< alive-neighbours 4))
-        1
-        0)
-      (if (= alive-neighbours 3)
-        1
-        0))))
+    (if alive?
+      (if (and (> alive-neighbours 1) (< alive-neighbours 4)) 1 0)
+      (if (= alive-neighbours 3) 1 0))))
 
 (defn next-row [row-idx row]
   (vec (map-indexed (fn [col-idx _] (next-cell-state row-idx col-idx)) row)))
@@ -52,38 +58,45 @@
 
 (defn draw-cell [row-idx col-idx cell-state]
   (let [color (if (= 1 cell-state) "black" "white")]
-    ^{:key (str row-idx col-idx)} [:div
+    ^{:key (str row-idx col-idx)} [:rect
                                    {:on-click #(switch-cell-state! row-idx col-idx)
-                                    :style
-                                              {:border           "1px solid"
-                                               :display          "inline-block"
-                                               :background-color color
-                                               :width            "20px"
-                                               :height           "20px"}
-                                    }
-                                   ""]))
+                                    :x (* 10 col-idx)
+                                    :y (* 10 row-idx)
+                                    :width 10
+                                    :height 10
+                                    :style {:fill color}}]))
 
 (defn draw-row [row-idx row]
-  ^{:key (str row-idx)} [:div
-                         {:style {:height "20px"}}
-                         (map-indexed (fn [idx cell] (draw-cell row-idx idx cell)) row)])
+  (map-indexed (fn [idx cell] (draw-cell row-idx idx cell)) row))
 
 (defn draw-grid []
   (map-indexed draw-row @grid))
 
+(def refreshing-grid? (r/atom false))
+
 (defn refresh-grid []
-  (let [next-grid (next-grid)]
-    #(reset! grid next-grid)))
+  (if @refreshing-grid?
+    (let [next-grid (next-grid)]
+      (reset! grid next-grid))))
 
+(defn refreshing-grid []
+  (do
+    (refresh-grid)
+    (if @refreshing-grid?
+      (js/setTimeout #(refreshing-grid) 500))))
 
-;(js/setTimeout  1000)
+(defn switch-refreshing []
+  (if @refreshing-grid?
+    (reset! refreshing-grid? false)
+    (do
+      (reset! refreshing-grid? true)
+      (refreshing-grid))))
 
 
 (defn game-of-life []
   [:div {:class "container"}
    [:h1 "Game of life"]
-   [:form {:class "form-inline"}
-
+   [:div {:class "form-inline"}
     [:div {:class "form-group"}
      [:label {:for "width"} "width"]
      [:input {:id        "width"
@@ -92,19 +105,28 @@
               :on-change #(reset! width (-> % .-target .-value))}]]
 
     [:div {:class "form-group"}
-     [:label {:for "height" :class "mdl-textfield__label"} "height"]
+     [:label {:for "percent"} "height"]
      [:input {:id        "width"
               :type      "number"
               :value     @height
               :on-change #(reset! height (-> % .-target .-value))}]]
 
+    [:div {:class "form-group"}
+     [:label {:for "percentageTrigger"} "Percentage trigger for random generation"]
+     [:input {:id        "width"
+              :type      "number"
+              :min       "0"
+              :max       "100"
+              :value     @percentageTrigger
+              :on-change #(reset! percentageTrigger (-> % .-target .-value))}]]
+
     [:button {:class    "btn btn-primary"
               :on-click #(reset! grid (generate-grid))} "Generate grid"]
 
     [:button {:class    "btn btn-primary"
-              :on-click #(println "test ")} "Start"]]
+              :on-click #(switch-refreshing)} (if @refreshing-grid? "Stop" "Start")]]
 
-   [:div {:class "container grid"}
+   [:svg {:width (* 10 @width) :height (* 10 @height)}
     (draw-grid)]
    ])
 

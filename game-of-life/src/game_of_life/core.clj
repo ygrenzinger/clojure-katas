@@ -1,4 +1,4 @@
-(ns reagent-tutorial.core)
+(ns game-of-life.core)
 
 (defn foo
   "I don't do a whole lot."
