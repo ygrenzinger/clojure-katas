@@ -33,11 +33,13 @@
   (swap! grid assoc-in [row-idx col-idx] (get-inverted-cell-state row-idx col-idx)))
 
 (defn neighbours [row-idx col-idx]
-  [[(dec row-idx) (dec col-idx)] [(dec row-idx) col-idx] [(dec row-idx) (inc col-idx)]
+  [[(dec row-idx) (dec col-idx)] [(dec row-idx) (identity col-idx) ] [(dec row-idx) (inc col-idx)]
    [row-idx (dec col-idx)] [row-idx (inc col-idx)]
    [(inc row-idx) (dec col-idx)] [(inc row-idx) col-idx] [(inc row-idx) (inc col-idx)]])
 
 (defn count-alive-neighbours [row-idx col-idx]
+  (println "row index " row-idx)
+
   (reduce + (map #(apply get-cell-state %) (neighbours row-idx col-idx))))
 
 (defn alive-cell? [row-idx col-idx]
@@ -54,7 +56,9 @@
   (vec (map-indexed (fn [col-idx _] (next-cell-state row-idx col-idx)) row)))
 
 (defn next-grid []
-  (vec (map-indexed (fn [row-idx row] (next-row row-idx row)) @grid)))
+  (vec (map-indexed
+         (fn [row-idx row] (next-row row-idx row))
+         @grid)))
 
 (defn draw-cell [row-idx col-idx cell-state]
   (let [color (if (= 1 cell-state) "black" "white")]
@@ -76,8 +80,7 @@
 
 (defn refresh-grid []
   (if @refreshing-grid?
-    (let [next-grid (next-grid)]
-      (reset! grid next-grid))))
+    (reset! grid (next-grid))))
 
 (defn refreshing-grid []
   (do
